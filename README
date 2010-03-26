@@ -1,0 +1,88 @@
+NAME
+    CPAN::Mini::Tested - create a CPAN mirror using modules that have passed
+    tests
+
+REQUIREMENTS
+    This module is designed for Perl 5.6.1. The following non-core
+    modules are required:
+
+      Cache::Simple::TimedExpiry
+      CPAN::Mini
+      DBI
+      DBD::SQLite
+      LWP
+      Regexp::Assemble
+
+Installation
+    Installation can be done using the traditional Makefile.PL or the
+    newer Build.PL methods.
+
+    Using Makefile.PL:
+
+      perl Makefile.PL
+      make
+      make test
+      make install
+
+    (On Windows platforms you should use nmake instead.)
+
+    Using Build.PL (if you have Module::Build installed):
+
+      perl Build.PL
+      perl Build
+      perl Build test
+      perl Build install
+
+SYNOPSYS
+      use CPAN::Mini::Tested;
+
+      CPAN::Mini::Tested->update_mirror(
+       remote => "http://cpan.mirrors.comintern.su",
+       local  => "/usr/share/mirrors/cpan",
+       trace  => 1
+      );
+
+DESCRIPTION
+    This module is a subclass of CPAN::Mini which checks the CPAN Testers
+    database for passing tests of that distribution on your platform.
+    Distributions will only be downloaded if there are passing tests.
+
+    The major differences are that it will download the testers.db file from
+    the CPAN Testers web site when updating indices, and it will check if a
+    distribution has passed tests in the specified platform before applying
+    other filtering rules to it.
+
+    See the module documentation for more information.
+
+REVISION HISTORY
+    The following changes were made since the previous public release:
+
+    0.22 Mon Apr  4 2005
+	- fixed misuse of Pod::Coverage tests
+	- documented inherited methods
+
+    See the Changes file for a detailed revision history.
+
+DSLIP
+  b - Beta testing
+  d - Developer
+  p - Perl-only
+  O - Object oriented
+  p - Standard Perl
+
+See <http://cpan.uwinnipeg.ca/htdocs/faqs/dslip.html>
+
+AUTHOR
+    Robert Rothenberg <rrwo at cpan.org>
+
+COPYRIGHT AND LICENSE
+    Copyright (C) 2005 by Robert Rothenberg. All Rights Reserved.
+
+    This library is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself, either Perl version 5.8.3 or, at
+    your option, any later version of Perl 5 you may have available.
+
+SEE ALSO
+    CPAN::Mini
+
+    CPAN Testers <http://testers.cpan.org>
