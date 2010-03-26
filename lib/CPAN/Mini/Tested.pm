@@ -30,173 +30,186 @@ sub _sth {
 }
 
 sub _connect {
-  my ($self, $database)  = @_;
+  my ( $self, $database ) = @_;
 
   $database ||= $self->{test_db_file};
 
-  unless (-r $database) {
+  unless ( -r $database ) {
     die "Cannot find database file";
   }
 
   $self->{test_db} = DBI->connect(
-    "DBI:SQLite:dbname=".$database, "", "", {
+    "DBI:SQLite:dbname=" . $database,
+    "", "",
+    {
       RaiseError => 1,
-      %{$self->{test_db_conn} || { }},
+      %{ $self->{test_db_conn} || {} },
     },
   ) or die "Unable to connect: ", $DBI::errstr;
 
   # TODO: support for additional reports fields such as perl version
 
-  $self->{test_db_sth} =
-    $self->_dbh->prepare( qq{
+  $self->{test_db_sth} = $self->_dbh->prepare(
+    qq{
       SELECT COUNT(id) FROM reports
       WHERE status='PASS' AND distribution=? AND version=? AND osname=?
-  }) or die "Unable to create prepare statement: ", $self->_dbh->errstr;
+  }
+  ) or die "Unable to create prepare statement: ", $self->_dbh->errstr;
 
   return 1;
 }
 
-
 sub _disconnect {
   my $self = shift;
-  if ($self->_dbh) {
-    $self->_sth->finish if ($self->_sth);
+  if ( $self->_dbh ) {
+    $self->_sth->finish if ( $self->_sth );
     $self->_dbh->disconnect;
   }
   return 1;
 }
 
 sub file_allowed {
-  my ($self, $file) = @_;
-  return (basename($file) eq 'testers.db') ? 1 :
-    CPAN::Mini::file_allowed($self, $file);
+  my ( $self, $file ) = @_;
+  return ( basename( $file ) eq 'testers.db' )
+   ? 1
+   : CPAN::Mini::file_allowed( $self, $file );
 }
 
 sub mirror_indices {
   my $self = shift;
 
-  if (defined $self->{test_db_arch}) {
+  if ( defined $self->{test_db_arch} ) {
     warn "test_db_arch is deprecated";
   }
 
-  $self->{test_db_file} ||= catfile($self->{local}, 'testers.db');
+  $self->{test_db_file} ||= catfile( $self->{local}, 'testers.db' );
   my $local_file = $self->{test_db_file};
 
   # test_db_age < 0, do not update it
 
   my $test_db_age = $self->{test_db_age};
-     $test_db_age = 1, unless (defined $test_db_age);
+  $test_db_age = 1, unless ( defined $test_db_age );
 
-  if ( ($self->{force}) || (!-e $local_file) ||
-       (($test_db_age >= 0) &&
-	(-e $local_file) && ((-M $local_file) > $test_db_age)) ){
-    $self->trace('testers.db');
-    my $db_src = $self->{test_db_src} ||
-      'http://testers.cpan.org/testers.db';
-    my $status = mirror($db_src, $local_file);
+  if (
+       ( $self->{force} )
+    || ( !-e $local_file )
+    || ( ( $test_db_age >= 0 )
+      && ( -e $local_file )
+      && ( ( -M $local_file ) > $test_db_age ) )
+   ) {
+    $self->trace( 'testers.db' );
+    my $db_src = $self->{test_db_src}
+     || 'http://testers.cpan.org/testers.db';
+    my $status = mirror( $db_src, $local_file );
 
-    if ($status == RC_OK) {
-      $self->trace(" ... updated\n");
-    } elsif ($status == RC_NOT_MODIFIED) {
-      $self->trace(" ... up to date\n");
-    } else {
+    if ( $status == RC_OK ) {
+      $self->trace( " ... updated\n" );
+    }
+    elsif ( $status == RC_NOT_MODIFIED ) {
+      $self->trace( " ... up to date\n" );
+    }
+    else {
       warn "\n$db_src: $status\n";
       return;
     }
 
   }
-  $self->_connect() if (-r $local_file);
+  $self->_connect() if ( -r $local_file );
 
-  return CPAN::Mini::mirror_indices($self);
+  return CPAN::Mini::mirror_indices( $self );
 }
 
 sub clean_unmirrored {
   my $self = shift;
   $self->_disconnect();
-  return CPAN::Mini::clean_unmirrored($self);
+  return CPAN::Mini::clean_unmirrored( $self );
 }
 
 sub _check_db {
-  my ($self, $dist, $ver, $osname) = @_;
+  my ( $self, $dist, $ver, $osname ) = @_;
 
   my $sth = $self->_sth;
-  unless ($sth) {
+  unless ( $sth ) {
     die "Not connected to the database\n";
   }
 
-  $sth->execute($dist, $ver, $osname);
+  $sth->execute( $dist, $ver, $osname );
   my $row = $sth->fetch;
 
-  if ($row) { return $row->[0]; } else { return 0; }
+  if   ( $row ) { return $row->[0]; }
+  else          { return 0; }
 }
 
 sub _reset_cache {
   my $self = shift;
-  $self->{test_db_cache} = undef, if ($self->{test_db_cache});
+  $self->{test_db_cache} = undef, if ( $self->{test_db_cache} );
   $self->{test_db_cache} = new Cache::Simple::TimedExpiry;
-  $self->{test_db_cache}->expire_after($self->{test_db_cache_expiry} || 300);
+  $self->{test_db_cache}
+   ->expire_after( $self->{test_db_cache_expiry} || 300 );
 }
 
 sub _passed {
-  my ($self, $path) = @_;
+  my ( $self, $path ) = @_;
 
   # CPAN::Mini 0.36 no longer calls the filter routine multiple times
   # per module, but it will for packages with multiple modules. So we
   # cache the results, but only for a limited time.
 
-  unless (defined $self->{test_db_cache}) {
+  unless ( defined $self->{test_db_cache} ) {
     $self->_reset_cache;
   }
 
-  if ($self->{test_db_exceptions}) {
+  if ( $self->{test_db_exceptions} ) {
 
-    if (ref($self->{test_db_exceptions}) eq "CODE") {
-      return 1, if ( &{ $self->{test_db_exceptions} }($path) );
+    if ( ref( $self->{test_db_exceptions} ) eq "CODE" ) {
+      return 1, if ( &{ $self->{test_db_exceptions} }( $path ) );
     }
     else {
 
       my $re = new Regexp::Assemble;
 
-      if (ref($self->{test_db_exceptions}) eq "ARRAY") {
-	$re->add( @{ $self->{test_db_exceptions} } );
-      } elsif ( (!ref($self->{test_db_exceptions})) || 
-		(ref($self->{test_db_exceptions}) eq "Regexp") ) {
-	$re->add( $self->{test_db_exceptions} );
-      } else {
-	die "Unknown test_db_exception type: ",
-	  ref($self->{test_db_exceptions});
+      if ( ref( $self->{test_db_exceptions} ) eq "ARRAY" ) {
+        $re->add( @{ $self->{test_db_exceptions} } );
+      }
+      elsif ( ( !ref( $self->{test_db_exceptions} ) )
+        || ( ref( $self->{test_db_exceptions} ) eq "Regexp" ) ) {
+        $re->add( $self->{test_db_exceptions} );
+      }
+      else {
+        die "Unknown test_db_exception type: ",
+         ref( $self->{test_db_exceptions} );
       }
 
-      return 1, if ($path =~ $re->re);
+      return 1, if ( $path =~ $re->re );
     }
   }
 
-  if ($self->{test_db_cache}->has_key($path)) {
-    return $self->{test_db_cache}->fetch($path);
+  if ( $self->{test_db_cache}->has_key( $path ) ) {
+    return $self->{test_db_cache}->fetch( $path );
   }
 
   my $count = 0;
 
-  my $distver = basename($path);
+  my $distver = basename( $path );
   $distver =~ s/\.(tar\.gz|tar\.bz2|zip)$//;
 
-  my $x       = rindex($distver, '-');
-  my $dist    = substr($distver, 0, $x);
-  my $ver     = substr($distver, $x+1);
+  my $x = rindex( $distver, '-' );
+  my $dist = substr( $distver, 0, $x );
+  my $ver = substr( $distver, $x + 1 );
 
   $self->{test_db_os} ||= $Config{osname};
 
-  if (ref($self->{test_db_os}) eq 'ARRAY') {
+  if ( ref( $self->{test_db_os} ) eq 'ARRAY' ) {
     my @archs = @{ $self->{test_db_os} };
-    while ( (!$count) && (my $arch = shift @archs) ) {
-      $count += $self->_check_db($dist, $ver, $arch);
+    while ( ( !$count ) && ( my $arch = shift @archs ) ) {
+      $count += $self->_check_db( $dist, $ver, $arch );
     }
   }
   else {
-    $count += $self->_check_db($dist, $ver, $self->{test_db_os});
+    $count += $self->_check_db( $dist, $ver, $self->{test_db_os} );
   }
 
-  $self->{test_db_cache}->set($path, $count);
+  $self->{test_db_cache}->set( $path, $count );
 
   return $count;
 }
@@ -206,9 +219,9 @@ sub _passed {
 # version which passes tests.
 
 sub _filter_module {
-  my ($self, $args) = @_;
-  return CPAN::Mini::_filter_module($self, $args)
-    || (!$self->_passed($args->{path}));
+  my ( $self, $args ) = @_;
+  return CPAN::Mini::_filter_module( $self, $args )
+   || ( !$self->_passed( $args->{path} ) );
 }
 
 1;
