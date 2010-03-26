@@ -1,16 +1,9 @@
-#!/usr/bin/perl
+#!perl -T
 
-use strict;
-use Test::More tests => 1;
-
-eval "use Pod::Coverage";
-
-plan skip_all => "Pod::Coverage required" if $@;
-
-my $pc = Pod::Coverage->new( package => 'CPAN::Mini::Tested' );
-
-ok( $pc->coverage == 1 );
-
-unless ( $pc == 1 ) {
-  print "\n\n\n\x23 ", join( " ", $pc->uncovered ), "\n\n\n\n";
-}
+use Test::More;
+eval "use Test::Pod::Coverage 1.04";
+plan skip_all =>
+ "Test::Pod::Coverage 1.04 required for testing POD coverage"
+ if $@;
+all_pod_coverage_ok(
+  { private => [ qr{^BUILD|DEMOLISH|AUTOMETHOD|START$}, qr{^_} ] } );
